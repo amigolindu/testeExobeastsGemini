@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic; // Adicionado para usar List<>
 
 public class UIManager : MonoBehaviour
 {
@@ -8,6 +9,10 @@ public class UIManager : MonoBehaviour
     public GameObject hudPanel;
     public GameObject pausePanel;
     public GameObject buildPanel;
+
+    [Header("Referências da UI de Construção")]
+    [Tooltip("Arraste o objeto da cena que contém o script BuildButtonUI.")]
+    public BuildButtonUI buildButtonUI;
 
     private void Awake()
     {
@@ -23,11 +28,24 @@ public class UIManager : MonoBehaviour
 
     void Start()
     {
-        // Garante que o HUD esteja ativo e os outros desativados no início
         ShowHUD();
     }
 
-    // Gerencia a visibilidade do HUD
+    // --- NOVO MÉTODO ---
+    // Pede ao BuildButtonUI para criar os botões com base na lista de torres.
+    public void UpdateBuildUI(List<CharacterBase> availableTowers)
+    {
+        if (buildButtonUI != null)
+        {
+            buildButtonUI.CreateBuildButtons(availableTowers);
+        }
+        else
+        {
+            Debug.LogWarning("A referência para o BuildButtonUI não foi definida no UIManager!");
+        }
+    }
+
+    // O restante do seu script original continua aqui sem alterações...
     public void ShowHUD()
     {
         if (hudPanel != null) hudPanel.SetActive(true);
@@ -35,44 +53,37 @@ public class UIManager : MonoBehaviour
         if (buildPanel != null) buildPanel.SetActive(false);
     }
 
-    // Gerencia a visibilidade do Menu de Pausa
     public void ShowPauseMenu(bool show)
     {
         if (pausePanel != null) pausePanel.SetActive(show);
 
         if (show)
         {
-            // Se o menu de pausa está ativo, desativa o HUD
             if (hudPanel != null) hudPanel.SetActive(false);
         }
         else
         {
-            // Se o menu de pausa foi desativado, retorna ao HUD ou modo de construção
-            // Verifica se o BuildManager está no modo de construção
             if (FindObjectOfType<BuildManager>() != null && FindObjectOfType<BuildManager>().isBuildingMode)
             {
-                ShowBuildUI(true); // Se estava construindo, reativa a UI de construção
+                ShowBuildUI(true);
             }
             else
             {
-                ShowHUD(); // Caso contrário, volta para o HUD
+                ShowHUD();
             }
         }
     }
 
-    // Gerencia a visibilidade da UI de Construção
     public void ShowBuildUI(bool show)
     {
         if (buildPanel != null) buildPanel.SetActive(show);
 
         if (show)
         {
-            // Se a UI de construção está ativa, desativa o HUD
             if (hudPanel != null) hudPanel.SetActive(false);
         }
         else
         {
-            // Se a UI de construção foi desativada, volta para o HUD
             ShowHUD();
         }
     }
