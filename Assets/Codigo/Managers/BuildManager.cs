@@ -1,17 +1,17 @@
+// BuildManager.cs (Solução revisada para posicionamento de torres)
 using UnityEngine;
 using System.Collections.Generic;
 using Unity.Cinemachine;
 
 public class BuildManager : MonoBehaviour
 {
-    public static BuildManager Instance; // Adicionado para fácil acesso (Singleton)
+    public static BuildManager Instance;
 
     [Header("Câmeras")]
     public CinemachineCamera buildCamera;
 
-    // --- MUDANÇA: A lista de torres agora é dinâmica ---
     private List<CharacterBase> availableTowers = new List<CharacterBase>();
-    private CharacterBase selectedTowerData; // Guarda o ScriptableObject da torre selecionada
+    private CharacterBase selectedTowerData;
 
     [Header("Visual do Ghost")]
     private GameObject currentBuildGhost;
@@ -19,6 +19,10 @@ public class BuildManager : MonoBehaviour
     public Material invalidPlacementMaterial;
 
     public bool isBuildingMode = false;
+    public float gridSize = 1f;
+
+    [Header("Configuração de Altura")]
+    public float globalHeightOffset = 0.5f; // Ajuste este valor no Inspector conforme necessário
 
     private const int PriorityBuild = 20;
     private const int PriorityInactive = 0;
@@ -36,32 +40,26 @@ public class BuildManager : MonoBehaviour
         Cursor.visible = false;
     }
 
-    // --- NOVO MÉTODO: Chamado pelo GameSetupManager para carregar as torres ---
     public void SetAvailableTowers(CharacterBase[] selectedTeam)
     {
         availableTowers.Clear();
-        for (int i = 1; i < selectedTeam.Length; i++) // Começa em 1 para pular o comandante
+        for (int i = 1; i < selectedTeam.Length; i++)
         {
             if (selectedTeam[i] != null)
             {
                 availableTowers.Add(selectedTeam[i]);
             }
         }
-        Debug.Log(availableTowers.Count + " torres disponíveis para construção.");
-
-        // Avisa o UIManager para criar os botões com esta lista
         if (UIManager.Instance != null)
         {
             UIManager.Instance.UpdateBuildUI(availableTowers);
         }
     }
 
-    // --- NOVO MÉTODO: A UI chamará este para selecionar uma torre ---
     public void SelectTowerToBuild(CharacterBase towerData)
     {
-        ClearSelection(); // Limpa o ghost anterior
+        ClearSelection();
         selectedTowerData = towerData;
-        Debug.Log("Torre selecionada para construir: " + towerData.name);
     }
 
     void Update()
@@ -89,7 +87,12 @@ public class BuildManager : MonoBehaviour
         {
             ClearSelection();
         }
-        UIManager.Instance.ShowBuildUI(state);
+
+        if (UIManager.Instance != null)
+        {
+            UIManager.Instance.ShowBuildUI(state);
+        }
+
         Cursor.lockState = state ? CursorLockMode.None : CursorLockMode.Locked;
         Cursor.visible = state;
     }
@@ -102,23 +105,38 @@ public class BuildManager : MonoBehaviour
             return;
         }
 
-        GameObject selectedPrefab = selectedTowerData.commanderPrefab;
-        if (selectedPrefab == null) return;
+        GameObject selectedPrefab = selectedTowerData.towerPrefab;
+        if (selectedPrefab == null)
+        {
+            if (currentBuildGhost != null) Destroy(currentBuildGhost);
+            return;
+        }
 
         if (currentBuildGhost == null)
         {
             currentBuildGhost = Instantiate(selectedPrefab);
-            Collider ghostCollider = currentBuildGhost.GetComponent<Collider>();
-            if (ghostCollider != null) ghostCollider.enabled = false;
+            var towerController = currentBuildGhost.GetComponentInChildren<TowerController>();
+            if (towerController) towerController.enabled = false;
+
+            Collider[] colliders = currentBuildGhost.GetComponentsInChildren<Collider>();
+            foreach (var col in colliders) col.enabled = false;
         }
 
-        // Sua lógica de Raycast, posicionamento e cor do material.
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
         RaycastHit hit;
 
         bool isOverValidSurface = Physics.Raycast(ray, out hit) && hit.transform.CompareTag("Local");
 
-        currentBuildGhost.transform.position = hit.point;
+        if (isOverValidSurface)
+        {
+            // Nova abordagem: usa o ponto de contato e ajusta a altura
+            float calculatedHeight = CalculateRequiredHeight(hit.point, selectedTowerData.towerPrefab);
+            currentBuildGhost.transform.position = new Vector3(hit.point.x, hit.point.y + calculatedHeight, hit.point.z);
+        }
+        else if (Physics.Raycast(ray, out hit))
+        {
+            currentBuildGhost.transform.position = hit.point + Vector3.up * globalHeightOffset;
+        }
 
         int buildingCost = selectedTowerData.cost;
         bool hasEnoughCurrency = CurrencyManager.Instance.HasEnoughCurrency(buildingCost, CurrencyType.Geodites);
@@ -130,25 +148,52 @@ public class BuildManager : MonoBehaviour
         }
     }
 
+    private float CalculateRequiredHeight(Vector3 hitPoint, GameObject prefab)
+    {
+        // Calcula a distância do ponto de impacto até a base do objeto
+        Collider col = prefab.GetComponentInChildren<Collider>();
+        if (col != null)
+        {
+            // Calcula a distância do centro do objeto até a base
+            float bottomDistance = col.bounds.extents.y;
+
+            // Projeta um ray para baixo para encontrar o terreno exato
+            Ray downRay = new Ray(hitPoint + Vector3.up * 10f, Vector3.down);
+            RaycastHit downHit;
+
+            if (Physics.Raycast(downRay, out downHit, 20f))
+            {
+                // Retorna a diferença de altura necessária
+                return downHit.point.y - hitPoint.y + bottomDistance + globalHeightOffset;
+            }
+        }
+
+        // Fallback: usa o offset global
+        return globalHeightOffset;
+    }
+
     void PlaceBuilding()
     {
         if (selectedTowerData == null || currentBuildGhost == null) return;
 
-        GameObject selectedPrefab = selectedTowerData.commanderPrefab;
-        int buildingCost = selectedTowerData.cost;
-
         var ghostRenderer = currentBuildGhost.GetComponentInChildren<MeshRenderer>();
         if (ghostRenderer != null && ghostRenderer.material.name.Contains(validPlacementMaterial.name))
         {
+            GameObject prefabToBuild = selectedTowerData.towerPrefab;
+            int buildingCost = selectedTowerData.cost;
+
             if (CurrencyManager.Instance.HasEnoughCurrency(buildingCost, CurrencyType.Geodites))
             {
-                Instantiate(selectedPrefab, currentBuildGhost.transform.position, Quaternion.identity);
+                // Usa a posição do fantasma (já com altura correta)
+                Vector3 finalPosition = currentBuildGhost.transform.position;
+
+                // Aplica grid snapping apenas no XZ
+                finalPosition.x = Mathf.Round(finalPosition.x / gridSize) * gridSize;
+                finalPosition.z = Mathf.Round(finalPosition.z / gridSize) * gridSize;
+
+                Instantiate(prefabToBuild, finalPosition, Quaternion.identity);
                 CurrencyManager.Instance.SpendCurrency(buildingCost, CurrencyType.Geodites);
                 ClearSelection();
-            }
-            else
-            {
-                Debug.Log("Não há Geoditas suficientes!");
             }
         }
     }

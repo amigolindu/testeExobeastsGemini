@@ -1,29 +1,18 @@
 using UnityEngine;
-using System.Collections.Generic; // Adicionado para usar List<>
+using System.Collections.Generic;
 
 public class UIManager : MonoBehaviour
 {
     public static UIManager Instance;
-
-    [Header("Painéis de UI")]
     public GameObject hudPanel;
     public GameObject pausePanel;
     public GameObject buildPanel;
-
-    [Header("Referências da UI de Construção")]
-    [Tooltip("Arraste o objeto da cena que contém o script BuildButtonUI.")]
     public BuildButtonUI buildButtonUI;
 
     private void Awake()
     {
-        if (Instance == null)
-        {
-            Instance = this;
-        }
-        else
-        {
-            Destroy(gameObject);
-        }
+        if (Instance == null) { Instance = this; }
+        else { Destroy(gameObject); }
     }
 
     void Start()
@@ -31,21 +20,21 @@ public class UIManager : MonoBehaviour
         ShowHUD();
     }
 
-    // --- NOVO MÉTODO ---
-    // Pede ao BuildButtonUI para criar os botões com base na lista de torres.
     public void UpdateBuildUI(List<CharacterBase> availableTowers)
     {
+        //Debug.Log("--- DEBUG: UIManager.UpdateBuildUI() foi chamado. ---");
         if (buildButtonUI != null)
         {
+           // Debug.Log("DEBUG: buildButtonUI encontrado. Chamando CreateBuildButtons...");
             buildButtonUI.CreateBuildButtons(availableTowers);
         }
         else
         {
-            Debug.LogWarning("A referência para o BuildButtonUI não foi definida no UIManager!");
+            Debug.LogError("DEBUG FALHA: A variável 'buildButtonUI' no UIManager está NULA!");
         }
     }
 
-    // O restante do seu script original continua aqui sem alterações...
+    // O resto do seu script...
     public void ShowHUD()
     {
         if (hudPanel != null) hudPanel.SetActive(true);
@@ -56,14 +45,13 @@ public class UIManager : MonoBehaviour
     public void ShowPauseMenu(bool show)
     {
         if (pausePanel != null) pausePanel.SetActive(show);
-
         if (show)
         {
             if (hudPanel != null) hudPanel.SetActive(false);
         }
         else
         {
-            if (FindObjectOfType<BuildManager>() != null && FindObjectOfType<BuildManager>().isBuildingMode)
+            if (BuildManager.Instance != null && BuildManager.Instance.isBuildingMode)
             {
                 ShowBuildUI(true);
             }
@@ -77,7 +65,6 @@ public class UIManager : MonoBehaviour
     public void ShowBuildUI(bool show)
     {
         if (buildPanel != null) buildPanel.SetActive(show);
-
         if (show)
         {
             if (hudPanel != null) hudPanel.SetActive(false);

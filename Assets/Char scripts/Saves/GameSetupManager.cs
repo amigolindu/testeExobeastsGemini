@@ -3,40 +3,38 @@ using UnityEngine;
 public class GameSetupManager : MonoBehaviour
 {
     [Header("Configuração de Spawn")]
-    public Transform spawnPoint; // Onde o comandante vai aparecer
+    public Transform spawnPoint;
 
     void Start()
     {
-        // Garante que a lógica rode no início da partida
+       // Debug.Log("--- DEBUG: GameSetupManager.Start() foi chamado. ---");
         SetupGame();
     }
 
     private void SetupGame()
     {
-        // 1. VERIFICA SE O GAME DATA MANAGER EXISTE
         if (GameDataManager.Instance == null)
         {
-            Debug.LogError("GameDataManager não encontrado! A cena foi iniciada diretamente?");
+            Debug.LogError("DEBUG FALHA: GameDataManager não existe!");
             return;
         }
+        //Debug.Log("DEBUG: GameDataManager encontrado.");
 
-        // 2. CRIA O COMANDANTE
         CharacterBase commanderData = GameDataManager.Instance.equipeSelecionada[0];
         if (commanderData != null && commanderData.commanderPrefab != null && spawnPoint != null)
         {
             Instantiate(commanderData.commanderPrefab, spawnPoint.position, spawnPoint.rotation);
+           // Debug.Log("DEBUG: Comandante instanciado.");
         }
 
-        // 3. AQUI ESTÁ A CONEXÃO QUE VOCÊ PERGUNTOU
-        // Ele encontra o BuildManager na cena e chama o método para entregar a lista de torres.
         if (BuildManager.Instance != null)
         {
-            // Pega a lista do GameDataManager e a "salva" dentro do BuildManager para esta partida.
+          //  Debug.Log("DEBUG: BuildManager encontrado. Chamando SetAvailableTowers...");
             BuildManager.Instance.SetAvailableTowers(GameDataManager.Instance.equipeSelecionada);
         }
         else
         {
-            Debug.LogError("BuildManager não foi encontrado na cena para configurar as torres!");
+            Debug.LogError("DEBUG FALHA: BuildManager.Instance é NULO!");
         }
     }
 }
